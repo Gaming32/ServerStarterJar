@@ -1,5 +1,7 @@
 package net.neoforged.serverstarterjar;
 
+import jdk.internal.loader.BuiltinClassLoader;
+import jdk.internal.module.Modules;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
@@ -20,8 +22,6 @@ import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.function.Predicate;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -32,20 +32,13 @@ public class Main {
     public static final char QUOTES = '"';
     public static final char SINGLE_QUOTES = '\'';
     public static final OperatingSystem OS = detectOs();
-    public static final MethodHandle LOAD_MODULE;
     public static final MethodHandle SET_bootLayer;
     public static final MethodHandle SET_installedProviders;
     public static final MethodHandle loadInstalledProviders;
 
     static {
-        // Open the needed packages below to ourselves
-        open(ModuleLayer.boot().findModule("java.base").orElseThrow(), "java.lang", Main.class.getModule());
-        export(ModuleLayer.boot().findModule("java.base").orElseThrow(), "jdk.internal.loader", Main.class.getModule());
-        open(ModuleLayer.boot().findModule("java.base").orElseThrow(), "java.nio.file.spi", Main.class.getModule());
-
         var lookup = MethodHandles.lookup();
         try {
-            LOAD_MODULE = lookup.unreflect(lookup.findClass("jdk.internal.loader.BuiltinClassLoader").getDeclaredMethod("loadModule", ModuleReference.class));
             SET_bootLayer = MethodHandles.privateLookupIn(System.class, lookup).unreflectSetter(System.class.getDeclaredField("bootLayer"));
 
             SET_installedProviders = MethodHandles.privateLookupIn(FileSystemProvider.class, lookup).findStaticSetter(FileSystemProvider.class, "installedProviders", List.class);
@@ -155,25 +148,11 @@ public class Main {
     }
 
     private static void export(Module module, String pkg, Module to) {
-        Agent.instrumentation.redefineModule(
-                module,
-                Set.of(),
-                Map.of(pkg, Set.of(to)),
-                Map.of(),
-                Set.of(),
-                Map.of()
-        );
+        Modules.addExports(module, pkg, to);
     }
 
     private static void open(Module module, String pkg, Module to) {
-        Agent.instrumentation.redefineModule(
-                module,
-                Set.of(),
-                Map.of(),
-                Map.of(pkg, Set.of(to)),
-                Set.of(),
-                Map.of()
-        );
+        Modules.addOpens(module, pkg, to);
     }
 
     private static boolean runInstaller(@Nullable URL installerUrl) throws Throwable {
@@ -239,11 +218,11 @@ public class Main {
         return null;
     }
 
-    private static ModuleLayer.Controller installModulePath(Path[] path) throws Throwable {
+    private static ModuleLayer.Controller installModulePath(Path[] path) {
         final var finder = ModuleFinder.of(path);
         final var allModules = finder.findAll();
         for (ModuleReference module : allModules) {
-            LOAD_MODULE.invoke(ClassLoader.getSystemClassLoader(), module);
+            ((BuiltinClassLoader)ClassLoader.getSystemClassLoader()).loadModule(module);
         }
         return ModuleLayer.defineModules(
                 ModuleLayer.boot().configuration().resolve(

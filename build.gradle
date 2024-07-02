@@ -39,13 +39,21 @@ java {
     }
 }
 
+compileJava {
+    options.compilerArgs.addAll([
+        '--add-exports=java.base/java.lang=net.neoforged.serverstarterjar',
+        '--add-exports=java.base/jdk.internal.loader=net.neoforged.serverstarterjar',
+        '--add-exports=java.base/jdk.internal.module=net.neoforged.serverstarterjar',
+        '--add-exports=java.base/java.nio.file.spi=net.neoforged.serverstarterjar',
+    ])
+}
+
 jar {
     archiveFileName = 'server.jar'
     manifest.attributes([
             'Implementation-Version': project.version.toString(),
             'Main-Class'            : 'net.neoforged.serverstarterjar.Main',
-            'Premain-Class'         : 'net.neoforged.serverstarterjar.Agent',
-            'Launcher-Agent-Class'  : 'net.neoforged.serverstarterjar.Agent'
+            'Add-Opens'             : 'java.base/java.lang java.base/jdk.internal.loader java.base/jdk.internal.module java.base/java.nio.file.spi'
     ])
 }
 
